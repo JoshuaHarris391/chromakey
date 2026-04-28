@@ -1,10 +1,18 @@
 # CHROMAKEY
 
-**A spectral background remover for AI-generated images (and anything else).**
+![CHROMAKEY interface](docs/screenshot.png)
 
-Created a logo or graphic with AI, but it still has the white background? I personally found it a pain to get rid of it, without having to learn complex tools or pay for expensive software. This tool gives you exactly what you need to fine-tune and remove the background from any image you upload.
+**A spectral background remover for AI-generated images, logos, and graphics.**
 
-No install. No account. No cloud upload — everything runs in your browser.
+## The problem
+
+You generated a logo or graphic with an AI tool (Midjourney, DALL·E, ChatGPT, Stable Diffusion, etc.) and it looks great — except it's stuck on a white or coloured background. To drop it into a slide, a website, or another design, you need a clean transparent PNG.
+
+The usual options are painful: open Photoshop, fight with the magic wand, or upload your work to some sketchy cloud service that may keep a copy. Existing one-click "remove.bg" tools either cost money, gate exports behind an account, or mangle the edges of clean vector-style art.
+
+## The solution
+
+CHROMAKEY is a fast, free, in-browser tool purpose-built for this exact job: take an AI-generated image with a flat background and give you back a transparent PNG in seconds. No install, no account, no cloud upload — everything runs locally in your browser.
 
 ---
 
