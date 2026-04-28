@@ -688,6 +688,56 @@ import './style.css';
       $('featherSlider').value = 0;
       $('featherValue').textContent = '0.0';
       state.feather = 0;
-      renderAllHistograms();
-      scheduleProcess();
+
+      state.image = null;
+      state.imageData = null;
+      state.width = 0;
+      state.height = 0;
+      state.wavelengthHist = null;
+      state.intensityHist = null;
+      state.lastRawSelectedCount = 0;
+
+      state.mode = 'mask';
+      document.querySelectorAll('.toggle-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === 'mask');
+      });
+      $('viewportMode').textContent = 'Mask Overlay';
+
+      state.invertMask = false;
+      $('invertSwitch').dataset.on = 'false';
+
+      state.outputBg = 'transparent';
+      document.querySelectorAll('#outputBgToggle .seg').forEach(b => {
+        b.classList.toggle('active', b.dataset.bg === 'transparent');
+      });
+
+      state.silhouetteColor = '#ffffff';
+      $('silhouetteColor').value = '#ffffff';
+
+      displayCanvas.style.display = 'none';
+      displayCanvas.width = 0;
+      displayCanvas.height = 0;
+      emptyState.style.display = '';
+      emptyState.classList.remove('dragover');
+
+      $('exportBtn').disabled = true;
+      $('exportSilhouetteBtn').disabled = true;
+      $('resetBtn').disabled = true;
+      $('resReadout').textContent = '—';
+      $('selectedPercent').textContent = '0.0';
+      $('pixelCount').textContent = '0';
+      $('sampleText').classList.add('empty');
+      $('sampleText').textContent = 'Hover to sample';
+      $('sampleSwatch').style.background = 'var(--raised)';
+      $('sampleSwatch').style.borderColor = 'var(--border-bright)';
+
+      $('zoomControls').classList.remove('active');
+      fitView();
+
+      [$('wavelengthHist'), $('intensityHist')].forEach(c => {
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, c.width, c.height);
+      });
+
+      fileInput.value = '';
     });
