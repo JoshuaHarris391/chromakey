@@ -12,6 +12,7 @@ import './style.css';
       lastRawSelectedCount: 0,
       invertMask: false,
       outputBg: 'transparent',
+      silhouetteColor: '#ffffff',
       zoom: 1,
       panX: 0,
       panY: 0,
@@ -74,6 +75,7 @@ import './style.css';
         emptyState.style.display = 'none';
 
         $('exportBtn').disabled = false;
+        $('exportSilhouetteBtn').disabled = false;
         $('resetBtn').disabled = false;
         $('resReadout').textContent = `${w}×${h}`;
         $('zoomControls').classList.add('active');
@@ -520,6 +522,53 @@ import './style.css';
         const a = document.createElement('a');
         a.href = url;
         a.download = whiteBg ? 'chromakey-output-white.png' : 'chromakey-output.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    });
+
+    function hexToRgb(hex) {
+      const h = hex.replace('#', '');
+      return [
+        parseInt(h.slice(0, 2), 16),
+        parseInt(h.slice(2, 4), 16),
+        parseInt(h.slice(4, 6), 16),
+      ];
+    }
+
+    $('silhouetteColor').addEventListener('input', (e) => {
+      state.silhouetteColor = e.target.value;
+    });
+
+    $('exportSilhouetteBtn').addEventListener('click', () => {
+      const w = state.width, h = state.height;
+      const mask = buildMask();
+      const src = state.imageData.data;
+      const [r, g, b] = hexToRgb(state.silhouetteColor);
+
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = w;
+      exportCanvas.height = h;
+      const ectx = exportCanvas.getContext('2d');
+      const out = ectx.createImageData(w, h);
+
+      for (let i = 0, p = 0; p < mask.length; i += 4, p++) {
+        const finalAlpha = src[i+3] * (1 - mask[p] / 255);
+        out.data[i]   = r;
+        out.data[i+1] = g;
+        out.data[i+2] = b;
+        out.data[i+3] = Math.round(finalAlpha);
+      }
+
+      ectx.putImageData(out, 0, 0);
+
+      exportCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chromakey-silhouette-${state.silhouetteColor.replace('#','')}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
