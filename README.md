@@ -1,0 +1,104 @@
+# CHROMAKEY
+
+**A spectral background remover for AI-generated images (and anything else).**
+
+Created a logo or graphic with AI, but it still has the white background? I personally found it a pain to get rid of it, without having to learn complex tools or pay for expensive software. This tool gives you exactly what you need to fine-tune and remove the background from any image you upload.
+
+No install. No account. No cloud upload — everything runs in your browser.
+
+---
+
+## What it does
+
+Drop in a PNG, JPG, or WebP. CHROMAKEY lets you select which parts of the image to remove based on two thresholds:
+
+- **Wavelength (color)** — isolate pixels by their position on the visible light spectrum (380–700nm). Handles greens, blues, reds, any saturated color.
+- **Intensity (brightness)** — isolate pixels by how light or dark they are. This is how you kill a white background: dial the minimum up until only the near-white pixels are selected.
+
+You get a live preview with a red mask overlay showing exactly what will be removed. Tweak until happy, then export a transparent PNG.
+
+## Features
+
+- Dual-range sliders for wavelength and intensity
+- Live histograms under each slider showing your image's actual color distribution — so you can see where the background peaks and bracket it precisely
+- Feather slider for soft, anti-aliased edges
+- Invert mask toggle (keep the subject instead of the background)
+- Output mode supports transparent OR solid white background
+- Zoom with wheel, buttons, or keyboard; click-drag to pan
+- Pixel probe on hover — shows wavelength and intensity of any pixel you point at
+- Live stats: percentage of image keyed, pixel count
+- Exports full-resolution PNG (up to 1800px on the long edge)
+
+## Running it
+
+This is a single HTML file. There's no build step, no dependencies, no server required.
+
+**Easiest way:** double-click `index.html` and it opens in your browser.
+
+**If you'd rather serve it locally** (some browsers are stricter about `file://` drag-and-drop):
+
+```bash
+# Python 3
+python -m http.server 8000
+
+# Node
+npx serve
+
+# PHP
+php -S localhost:8000
+```
+
+Then open `http://localhost:8000` in your browser.
+
+## How to use
+
+1. **Drop an image** into the viewport (or click to browse)
+2. **Pick your target color** with the wavelength slider — the histogram below it shows where your image's pixels actually cluster on the spectrum, so just bracket the peak that represents your background
+3. **Refine with intensity** if needed
+4. **Feather** a little if the edges look jagged (0.5–1.5px is usually enough)
+5. **Toggle Invert** if you accidentally keyed out the subject
+6. **Switch to Output view** to preview the final result; pick transparent or white background
+7. **Export PNG**
+
+### Recipe: removing white backgrounds from AI art
+
+Leave wavelength at full range (380–700nm), pull **intensity min** up to around 88–92%, add 0.5–1px feather. Done.
+
+### Recipe: removing a green screen
+
+Drag the wavelength handles to hug the green peak in the histogram (around 500–560nm). Leave intensity wide open.
+
+### Recipe: isolating just the dark parts
+
+Pull **intensity max** down so only low-brightness pixels are selected. Good for extracting line art or shadows.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
+| `0` | Fit to screen |
+
+## Browser support
+
+Anything modern — Canvas 2D and ES6 are the only hard requirements:
+
+- Chrome / Edge 90+
+- Firefox 88+
+- Safari 14+
+
+## Privacy
+
+Your images never leave your computer. All processing happens client-side in JavaScript. No uploads, no telemetry, no accounts.
+
+## Tech notes
+
+- Vanilla HTML / CSS / JavaScript — zero frameworks, zero dependencies
+- Color thresholding uses HSV with a hue-to-wavelength approximation (red ≈ 700nm, violet ≈ 380nm). Non-spectral magentas/pinks are deliberately excluded so they don't get false-positive matched by any wavelength range.
+- Feathering is a Gaussian blur on the mask's alpha channel, applied after invert so edges soften correctly regardless of direction
+- Large images are downscaled to 1800px on the long edge for responsive slider performance
+
+## License
+
+MIT — see `LICENSE`.

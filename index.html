@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHROMAKEY — Spectral Background Remover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #0e0e0e;
+    --raised: #141414;
+    --border: #1c1c1c;
+    --border-bright: #2a2a2a;
+
+    --text: #fafafa;
+    --text-mid: #a3a3a3;
+    --text-dim: #5c5c5c;
+    --text-faint: #303030;
+
+    --accent: #c4fa6b;
+    --accent-dim: #6b8a3c;
+    --red: #ef4444;
+
+    --display: 'Chakra Petch', sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  body {
+    font-family: var(--mono);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.5;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── App ─────────────────────────────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  /* ── Header ──────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+  }
+
+  .brand-name {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 22px;
+    letter-spacing: 0.18em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .brand-tag {
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--text-dim);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(196, 250, 107, 0.6);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Main ────────────────────────────────────────────────── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    overflow: hidden;
+  }
+
+  /* ── Viewport ────────────────────────────────────────────── */
+  .viewport-wrap {
+    position: relative;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .viewport-wrap::before,
+  .viewport-wrap::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .viewport-wrap::before {
+    top: 18px; left: 18px;
+    border-top: 1px solid var(--border-bright);
+    border-left: 1px solid var(--border-bright);
+  }
+  .viewport-wrap::after {
+    bottom: 18px; right: 18px;
+    border-bottom: 1px solid var(--border-bright);
+    border-right: 1px solid var(--border-bright);
+  }
+
+  .viewport-info {
+    position: absolute;
+    top: 22px;
+    right: 28px;
+    display: flex;
+    gap: 20px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    z-index: 2;
+  }
+
+  .viewport-info .k { color: var(--text-faint); margin-right: 6px; }
+
+  .mode-indicator {
+    position: absolute;
+    bottom: 22px;
+    left: 28px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    z-index: 2;
+  }
+
+  .mode-indicator .dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+    box-shadow: 0 0 6px rgba(196, 250, 107, 0.5);
+  }
+
+  .viewport {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 48px;
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 0 0;
+  }
+
+  .viewport canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    cursor: crosshair;
+    transform-origin: center center;
+    will-change: transform;
+    background-color: #0f0f0f;
+    background-image:
+      linear-gradient(45deg, #141414 25%, transparent 25%),
+      linear-gradient(-45deg, #141414 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #141414 75%),
+      linear-gradient(-45deg, transparent 75%, #141414 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+
+  .viewport canvas.panning { cursor: grabbing; }
+
+  /* ── Zoom controls ───────────────────────────────────────── */
+  .zoom-controls {
+    position: absolute;
+    bottom: 22px;
+    right: 28px;
+    display: none;
+    align-items: stretch;
+    z-index: 3;
+    border: 1px solid var(--border-bright);
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .zoom-controls.active { display: flex; }
+
+  .zoom-btn, .zoom-label {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+  }
+
+  .zoom-btn {
+    width: 30px;
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1;
+    padding-bottom: 2px;
+  }
+
+  .zoom-label {
+    width: 54px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    color: var(--text);
+    border-left: 1px solid var(--border-bright);
+    border-right: 1px solid var(--border-bright);
+  }
+
+  .zoom-btn:hover, .zoom-label:hover {
+    color: var(--accent);
+    background: var(--raised);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 56px 80px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    position: relative;
+  }
+
+  .empty-state::before,
+  .empty-state::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: var(--border-bright);
+    border-style: solid;
+    transition: border-color 0.2s;
+  }
+  .empty-state::before {
+    top: 0; left: 0;
+    border-width: 1px 0 0 1px;
+  }
+  .empty-state::after {
+    bottom: 0; right: 0;
+    border-width: 0 1px 1px 0;
+  }
+
+  .empty-state:hover::before,
+  .empty-state:hover::after,
+  .empty-state.dragover::before,
+  .empty-state.dragover::after {
+    border-color: var(--accent);
+  }
+
+  .empty-plus {
+    font-family: var(--display);
+    font-weight: 300;
+    font-size: 42px;
+    color: var(--text-dim);
+    line-height: 1;
+    margin-bottom: 20px;
+    transition: color 0.2s;
+  }
+
+  .empty-state:hover .empty-plus,
+  .empty-state.dragover .empty-plus {
+    color: var(--accent);
+  }
+
+  .empty-title {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 14px;
+    color: var(--text);
+    letter-spacing: 0.22em;
+    margin-bottom: 10px;
+  }
+
+  .empty-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .empty-sub .sep {
+    color: var(--text-faint);
+    margin: 0 8px;
+  }
+
+  /* ── Panel ───────────────────────────────────────────────── */
+  .panel {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-section {
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-section:last-child { border-bottom: none; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .section-label .symbol {
+    font-family: var(--display);
+    font-size: 13px;
+    color: var(--text-faint);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .readout {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+
+  .readout-value {
+    font-family: var(--display);
+    font-weight: 300;
+    font-size: 24px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .readout-value .sep {
+    color: var(--text-faint);
+    margin: 0 10px;
+    font-weight: 300;
+  }
+
+  .readout-value .unit {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.12em;
+    margin-left: 8px;
+    font-weight: 300;
+  }
+
+  /* ── Histogram ───────────────────────────────────────────── */
+  .histogram {
+    position: relative;
+    height: 44px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .histogram canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .histogram::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: var(--border);
+    pointer-events: none;
+  }
+
+  /* ── Options (invert + output bg) ────────────────────────── */
+  .options {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--border);
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg);
+    min-height: 38px;
+  }
+
+  .option + .option { border-top: 1px solid var(--border); }
+
+  .option-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* Toggle switch */
+  .switch {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-block;
+  }
+
+  .switch-track {
+    display: inline-block;
+    width: 30px;
+    height: 14px;
+    background: var(--raised);
+    border: 1px solid var(--border-bright);
+    position: relative;
+    transition: all 0.15s;
+    vertical-align: middle;
+  }
+
+  .switch-thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 10px;
+    height: 10px;
+    background: var(--text-dim);
+    transition: all 0.15s;
+  }
+
+  .switch[data-on="true"] .switch-track {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .switch[data-on="true"] .switch-thumb {
+    left: 17px;
+    background: var(--bg);
+  }
+
+  /* Segmented control */
+  .segmented {
+    display: flex;
+    border: 1px solid var(--border-bright);
+  }
+
+  .seg {
+    padding: 5px 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .seg + .seg { border-left: 1px solid var(--border-bright); }
+
+  .seg:hover:not(.active) { color: var(--text); }
+
+  .seg.active {
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  /* ── Dual slider ─────────────────────────────────────────── */
+  .dual-slider {
+    position: relative;
+    height: 24px;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .dual-slider .track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 4px;
+    transform: translateY(-50%);
+  }
+
+  .track-spectrum {
+    background: linear-gradient(to right,
+      #6b21a8 0%,
+      #2563eb 22%,
+      #0891b2 38%,
+      #16a34a 53%,
+      #eab308 63%,
+      #ea580c 75%,
+      #dc2626 100%
+    );
+    opacity: 0.85;
+  }
+
+  .track-intensity {
+    background: linear-gradient(to right, #000 0%, #fff 100%);
+  }
+
+  .dim-left, .dim-right {
+    position: absolute;
+    top: 50%;
+    height: 4px;
+    background: rgba(10, 10, 10, 0.78);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .dim-left { left: 0; }
+  .dim-right { right: 0; }
+
+  .dual-slider .handle {
+    position: absolute;
+    top: 50%;
+    width: 2px;
+    height: 20px;
+    background: var(--text);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    z-index: 2;
+    transition: background 0.12s, box-shadow 0.12s;
+  }
+
+  .dual-slider .handle::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    background: var(--text);
+    transform: translateX(-50%);
+    transition: background 0.12s;
+  }
+
+  .dual-slider .handle:hover,
+  .dual-slider .handle.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(196, 250, 107, 0.5);
+  }
+  .dual-slider .handle:hover::before,
+  .dual-slider .handle.active::before {
+    background: var(--accent);
+  }
+  .dual-slider .handle:active { cursor: grabbing; }
+
+  /* Single slider */
+  .single-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--raised);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .single-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 2px;
+    height: 20px;
+    background: var(--text);
+    cursor: pointer;
+    border-radius: 0;
+    box-shadow: 0 -4px 0 0 var(--text), 0 4px 0 0 transparent;
+  }
+
+  .single-slider::-moz-range-thumb {
+    width: 2px;
+    height: 20px;
+    background: var(--text);
+    cursor: pointer;
+    border-radius: 0;
+    border: none;
+  }
+
+  .single-slider:hover::-webkit-slider-thumb {
+    background: var(--accent);
+    box-shadow: 0 -4px 0 0 var(--accent);
+  }
+  .single-slider:hover::-moz-range-thumb {
+    background: var(--accent);
+  }
+
+  /* ── View mode toggles ───────────────────────────────────── */
+  .toggle-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .toggle-btn {
+    padding: 11px 10px;
+    background: var(--panel);
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .toggle-btn:hover:not(.active) { color: var(--text); background: var(--raised); }
+
+  .toggle-btn.active {
+    color: var(--bg);
+    background: var(--text);
+  }
+
+  /* ── Stats ───────────────────────────────────────────────── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat .k {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .stat .v {
+    font-family: var(--display);
+    font-weight: 300;
+    font-size: 28px;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat .v .unit {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 4px;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Sample ──────────────────────────────────────────────── */
+  .sample {
+    margin-top: 16px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+  }
+
+  .sample-swatch {
+    width: 16px;
+    height: 16px;
+    background: var(--raised);
+    flex-shrink: 0;
+    border: 1px solid var(--border-bright);
+  }
+
+  .sample-text {
+    color: var(--text-dim);
+    font-family: var(--mono);
+    flex: 1;
+    letter-spacing: 0.04em;
+  }
+
+  .sample-text.empty { color: var(--text-faint); }
+  .sample-text .hi { color: var(--text); }
+  .sample-text .lbl { color: var(--text-dim); }
+
+  /* ── Buttons ─────────────────────────────────────────────── */
+  .btn {
+    width: 100%;
+    padding: 14px 20px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--text);
+  }
+
+  .btn:disabled {
+    background: var(--raised);
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border-bright);
+    margin-top: 8px;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--text-dim);
+    background: transparent;
+  }
+
+  .file-input { display: none; }
+
+  /* Scrollbar */
+  .panel::-webkit-scrollbar, .viewport::-webkit-scrollbar { width: 6px; height: 6px; }
+  .panel::-webkit-scrollbar-track, .viewport::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb, .viewport::-webkit-scrollbar-thumb { background: var(--border-bright); }
+  .panel::-webkit-scrollbar-thumb:hover, .viewport::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+  <div class="app">
+
+    <header>
+      <div class="brand">
+        <div class="brand-name">CHROMAKEY</div>
+        <div class="brand-tag">Spectral Background Remover</div>
+      </div>
+      <div class="live">
+        <div class="live-dot"></div>
+        <span>Live</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="viewport-wrap">
+        <div class="viewport-info">
+          <span><span class="k">RES</span><span id="resReadout">—</span></span>
+        </div>
+        <div class="mode-indicator">
+          <span class="dot"></span><span id="viewportMode">Mask Overlay</span>
+        </div>
+        <div class="viewport" id="viewport">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-plus">+</div>
+            <div class="empty-title">DROP IMAGE</div>
+            <div class="empty-sub">PNG<span class="sep">·</span>JPG<span class="sep">·</span>WEBP</div>
+          </div>
+          <canvas id="displayCanvas" style="display:none;"></canvas>
+          <input type="file" id="fileInput" class="file-input" accept="image/png,image/jpeg,image/webp">
+        </div>
+        <div class="zoom-controls" id="zoomControls">
+          <button class="zoom-btn" id="zoomOut" title="Zoom out">−</button>
+          <button class="zoom-label" id="zoomLabel" title="Fit to screen">100%</button>
+          <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+        </div>
+      </div>
+
+      <aside class="panel">
+
+        <div class="panel-section">
+          <div class="section-label">
+            <span>Wavelength</span>
+            <span class="symbol">λ</span>
+          </div>
+          <div class="readout">
+            <div class="readout-value">
+              <span id="wavelengthMinValue">380</span><span class="sep">—</span><span id="wavelengthMaxValue">700</span><span class="unit">nm</span>
+            </div>
+          </div>
+          <div class="histogram">
+            <canvas id="wavelengthHist"></canvas>
+          </div>
+          <div class="dual-slider" id="wavelengthSlider" data-min="380" data-max="700">
+            <div class="track track-spectrum"></div>
+            <div class="dim-left"></div>
+            <div class="dim-right"></div>
+            <div class="handle handle-min"></div>
+            <div class="handle handle-max"></div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">
+            <span>Intensity</span>
+            <span class="symbol">I</span>
+          </div>
+          <div class="readout">
+            <div class="readout-value">
+              <span id="intensityMinValue">0</span><span class="sep">—</span><span id="intensityMaxValue">100</span><span class="unit">%</span>
+            </div>
+          </div>
+          <div class="histogram">
+            <canvas id="intensityHist"></canvas>
+          </div>
+          <div class="dual-slider" id="intensitySlider" data-min="0" data-max="100">
+            <div class="track track-intensity"></div>
+            <div class="dim-left"></div>
+            <div class="dim-right"></div>
+            <div class="handle handle-min"></div>
+            <div class="handle handle-max"></div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">
+            <span>Feather</span>
+            <span class="symbol">≈</span>
+          </div>
+          <div class="readout">
+            <div class="readout-value">
+              <span id="featherValue">0.0</span><span class="unit">px</span>
+            </div>
+          </div>
+          <input type="range" id="featherSlider" class="single-slider" min="0" max="20" value="0" step="0.1">
+        </div>
+
+        <div class="panel-section">
+          <div class="section-label">
+            <span>View</span>
+            <span class="symbol">◎</span>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn active" data-mode="mask">Mask</button>
+            <button class="toggle-btn" data-mode="output">Output</button>
+            <button class="toggle-btn" data-mode="original">Source</button>
+          </div>
+
+          <div class="options">
+            <div class="option">
+              <span class="option-label">Invert mask</span>
+              <button class="switch" id="invertSwitch" data-on="false" aria-label="Invert mask">
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </button>
+            </div>
+            <div class="option">
+              <span class="option-label">Output bg</span>
+              <div class="segmented" id="outputBgToggle">
+                <button class="seg active" data-bg="transparent">Trans</button>
+                <button class="seg" data-bg="white">White</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="k">Keyed</div>
+              <div class="v"><span id="selectedPercent">0.0</span><span class="unit">%</span></div>
+            </div>
+            <div class="stat">
+              <div class="k">Pixels</div>
+              <div class="v" style="font-size:22px;"><span id="pixelCount">0</span></div>
+            </div>
+          </div>
+
+          <div class="sample">
+            <div class="sample-swatch" id="sampleSwatch"></div>
+            <div class="sample-text empty" id="sampleText">Hover to sample</div>
+          </div>
+        </div>
+
+        <div class="panel-section" style="margin-top:auto;">
+          <button class="btn" id="exportBtn" disabled>Export PNG</button>
+          <button class="btn btn-secondary" id="resetBtn" disabled>Reset</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      image: null,
+      imageData: null,
+      width: 0,
+      height: 0,
+      mode: 'mask',
+      wavelength: { min: 380, max: 700 },
+      intensity: { min: 0, max: 100 },
+      feather: 0,
+      lastRawSelectedCount: 0,
+      invertMask: false,
+      outputBg: 'transparent',
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      isPanning: false,
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const viewport = $('viewport');
+    const emptyState = $('emptyState');
+    const displayCanvas = $('displayCanvas');
+    const displayCtx = displayCanvas.getContext('2d');
+    const fileInput = $('fileInput');
+
+    emptyState.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) loadImage(e.target.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach(ev => {
+      viewport.addEventListener(ev, (e) => {
+        e.preventDefault();
+        emptyState.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      viewport.addEventListener(ev, (e) => {
+        e.preventDefault();
+        emptyState.classList.remove('dragover');
+      });
+    });
+    viewport.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) loadImage(file);
+    });
+
+    function loadImage(file) {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1800;
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+
+        const src = document.createElement('canvas');
+        src.width = w; src.height = h;
+        src.getContext('2d').drawImage(img, 0, 0, w, h);
+
+        state.image = src;
+        state.width = w;
+        state.height = h;
+        state.imageData = src.getContext('2d').getImageData(0, 0, w, h);
+
+        displayCanvas.width = w;
+        displayCanvas.height = h;
+        displayCanvas.style.display = 'block';
+        emptyState.style.display = 'none';
+
+        $('exportBtn').disabled = false;
+        $('resetBtn').disabled = false;
+        $('resReadout').textContent = `${w}×${h}`;
+        $('zoomControls').classList.add('active');
+        fitView();
+
+        computeHistograms();
+        renderAllHistograms();
+        process();
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(file);
+    }
+
+    function rgbToHsv(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      const d = max - min;
+      const v = max;
+      const s = max === 0 ? 0 : d / max;
+      let h = 0;
+      if (d !== 0) {
+        if (max === r)      h = ((g - b) / d) + (g < b ? 6 : 0);
+        else if (max === g) h = ((b - r) / d) + 2;
+        else                h = ((r - g) / d) + 4;
+        h *= 60;
+      }
+      return [h, s, v];
+    }
+
+    function hueToWavelength(h) {
+      if (h <= 270) return 700 - (h / 270) * 320;
+      return -1;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // HISTOGRAMS
+    // ════════════════════════════════════════════════════════════
+    const HIST_BUCKETS = 64;
+
+    // Spectrum color stops — match the slider track gradient exactly.
+    const SPECTRUM_STOPS = [
+      { pos: 0.00, color: [107,  33, 168] }, // violet (380nm)
+      { pos: 0.22, color: [ 37,  99, 235] }, // blue
+      { pos: 0.38, color: [  8, 145, 178] }, // cyan
+      { pos: 0.53, color: [ 22, 163,  74] }, // green
+      { pos: 0.63, color: [234, 179,   8] }, // yellow
+      { pos: 0.75, color: [234,  88,  12] }, // orange
+      { pos: 1.00, color: [220,  38,  38] }  // red (700nm)
+    ];
+
+    function spectrumColorAt(t) {
+      t = Math.max(0, Math.min(1, t));
+      for (let i = 0; i < SPECTRUM_STOPS.length - 1; i++) {
+        const a = SPECTRUM_STOPS[i], b = SPECTRUM_STOPS[i + 1];
+        if (t >= a.pos && t <= b.pos) {
+          const lt = (t - a.pos) / (b.pos - a.pos);
+          return `rgb(${
+            Math.round(a.color[0] + (b.color[0] - a.color[0]) * lt)},${
+            Math.round(a.color[1] + (b.color[1] - a.color[1]) * lt)},${
+            Math.round(a.color[2] + (b.color[2] - a.color[2]) * lt)})`;
+        }
+      }
+      return 'rgb(220,38,38)';
+    }
+
+    function computeHistograms() {
+      if (!state.imageData) return;
+      const { data } = state.imageData;
+      const wHist = new Float32Array(HIST_BUCKETS);
+      const iHist = new Float32Array(HIST_BUCKETS);
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const [hue, sat, val] = rgbToHsv(r, g, b);
+
+        // Intensity — every pixel contributes
+        const ib = Math.min(Math.floor(val * HIST_BUCKETS), HIST_BUCKETS - 1);
+        iHist[ib]++;
+
+        // Wavelength — only saturated, spectral pixels
+        if (sat >= 0.05) {
+          const wl = hueToWavelength(hue);
+          if (wl >= 380 && wl <= 700) {
+            const wb = Math.min(Math.floor(((wl - 380) / 320) * HIST_BUCKETS), HIST_BUCKETS - 1);
+            wHist[wb]++;
+          }
+        }
+      }
+
+      state.wavelengthHist = wHist;
+      state.intensityHist = iHist;
+    }
+
+    function renderHistogram(canvasId, hist, range, rangeMin, rangeMax, inRangeColorFn) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !hist) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      // Log normalization
+      let max = 0;
+      for (let i = 0; i < hist.length; i++) if (hist[i] > max) max = hist[i];
+      if (max === 0) return;
+      const logMax = Math.log(1 + max);
+
+      const bw = rect.width / hist.length;
+      const gap = 0.5;
+
+      for (let i = 0; i < hist.length; i++) {
+        const t = i / (hist.length - 1);                // 0..1 position in range
+        const value = range[0] + t * (range[1] - range[0]);
+        const inRange = value >= rangeMin && value <= rangeMax;
+        const h = rect.height * (Math.log(1 + hist[i]) / logMax);
+
+        ctx.fillStyle = inRange ? inRangeColorFn(t) : '#262626';
+        ctx.fillRect(i * bw, rect.height - h, Math.max(bw - gap, 0.5), h);
+      }
+    }
+
+    function renderWavelengthHist() {
+      renderHistogram(
+        'wavelengthHist',
+        state.wavelengthHist,
+        [380, 700],
+        state.wavelength.min,
+        state.wavelength.max,
+        (t) => spectrumColorAt(t)
+      );
+    }
+
+    function renderIntensityHist() {
+      renderHistogram(
+        'intensityHist',
+        state.intensityHist,
+        [0, 100],
+        state.intensity.min,
+        state.intensity.max,
+        () => '#fafafa'
+      );
+    }
+
+    function renderAllHistograms() {
+      renderWavelengthHist();
+      renderIntensityHist();
+    }
+
+    window.addEventListener('resize', () => {
+      if (state.imageData) renderAllHistograms();
+    });
+
+    function computeRawMask() {
+      const { data } = state.imageData;
+      const total = state.width * state.height;
+      const mask = new Uint8Array(total);
+
+      const wMin = state.wavelength.min;
+      const wMax = state.wavelength.max;
+      const iMin = state.intensity.min / 100;
+      const iMax = state.intensity.max / 100;
+      const fullWavelength = wMin <= 380 && wMax >= 700;
+
+      let selected = 0;
+
+      for (let i = 0, p = 0; p < total; i += 4, p++) {
+        const r = data[i], g = data[i+1], b = data[i+2];
+        const [hue, sat, val] = rgbToHsv(r, g, b);
+
+        if (val < iMin || val > iMax) continue;
+
+        if (sat < 0.05) {
+          if (fullWavelength) { mask[p] = 255; selected++; }
+          continue;
+        }
+
+        const wavelength = hueToWavelength(hue);
+        if (wavelength < 0) continue;
+
+        if (wavelength >= wMin && wavelength <= wMax) {
+          mask[p] = 255;
+          selected++;
+        }
+      }
+
+      state.lastRawSelectedCount = selected;
+      return mask;
+    }
+
+    function featherMask(mask, radius) {
+      const w = state.width, h = state.height;
+      const c1 = document.createElement('canvas');
+      c1.width = w; c1.height = h;
+      const ctx1 = c1.getContext('2d');
+      const id = ctx1.createImageData(w, h);
+      for (let i = 0, p = 0; p < mask.length; i += 4, p++) {
+        id.data[i] = id.data[i+1] = id.data[i+2] = 255;
+        id.data[i+3] = mask[p];
+      }
+      ctx1.putImageData(id, 0, 0);
+
+      const c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      const ctx2 = c2.getContext('2d');
+      ctx2.filter = `blur(${radius}px)`;
+      ctx2.drawImage(c1, 0, 0);
+
+      const blurred = ctx2.getImageData(0, 0, w, h).data;
+      const result = new Uint8Array(mask.length);
+      for (let i = 3, p = 0; p < result.length; i += 4, p++) {
+        result[p] = blurred[i];
+      }
+      return result;
+    }
+
+    function buildMask() {
+      let mask = computeRawMask();
+      if (state.invertMask) {
+        const inv = new Uint8Array(mask.length);
+        for (let i = 0; i < mask.length; i++) inv[i] = 255 - mask[i];
+        mask = inv;
+      }
+      return state.feather > 0 ? featherMask(mask, state.feather) : mask;
+    }
+
+    function render(maskAlpha) {
+      const w = state.width, h = state.height;
+      const src = state.imageData.data;
+
+      if (state.mode === 'original') {
+        displayCtx.putImageData(state.imageData, 0, 0);
+        return;
+      }
+
+      const out = displayCtx.createImageData(w, h);
+
+      if (state.mode === 'mask') {
+        for (let i = 0, p = 0; p < maskAlpha.length; i += 4, p++) {
+          const m = maskAlpha[p] / 255 * 0.68;
+          out.data[i]   = Math.round(src[i]   * (1 - m) + 239 * m);
+          out.data[i+1] = Math.round(src[i+1] * (1 - m) + 68  * m);
+          out.data[i+2] = Math.round(src[i+2] * (1 - m) + 68  * m);
+          out.data[i+3] = src[i+3];
+        }
+      } else {
+        // output mode: composite with transparent or white bg
+        const whiteBg = state.outputBg === 'white';
+        for (let i = 0, p = 0; p < maskAlpha.length; i += 4, p++) {
+          const keep = 1 - maskAlpha[p] / 255;
+          const finalAlpha = src[i+3] * keep;
+          if (whiteBg) {
+            const a = finalAlpha / 255;
+            out.data[i]   = Math.round(src[i]   * a + 255 * (1 - a));
+            out.data[i+1] = Math.round(src[i+1] * a + 255 * (1 - a));
+            out.data[i+2] = Math.round(src[i+2] * a + 255 * (1 - a));
+            out.data[i+3] = 255;
+          } else {
+            out.data[i]   = src[i];
+            out.data[i+1] = src[i+1];
+            out.data[i+2] = src[i+2];
+            out.data[i+3] = Math.round(finalAlpha);
+          }
+        }
+      }
+
+      displayCtx.putImageData(out, 0, 0);
+    }
+
+    function process() {
+      if (!state.imageData) return;
+      const mask = buildMask();
+      const total = state.width * state.height;
+      const rawCount = state.lastRawSelectedCount;
+      const keyedCount = state.invertMask ? total - rawCount : rawCount;
+      const pct = (keyedCount / total) * 100;
+      $('selectedPercent').textContent = pct.toFixed(1);
+      $('pixelCount').textContent = keyedCount.toLocaleString();
+      render(mask);
+    }
+
+    function setupDualSlider(el, onChange) {
+      const min = parseFloat(el.dataset.min);
+      const max = parseFloat(el.dataset.max);
+      const handleMin = el.querySelector('.handle-min');
+      const handleMax = el.querySelector('.handle-max');
+      const dimLeft = el.querySelector('.dim-left');
+      const dimRight = el.querySelector('.dim-right');
+      let values = { min, max };
+
+      function paint() {
+        const minPct = (values.min - min) / (max - min) * 100;
+        const maxPct = (values.max - min) / (max - min) * 100;
+        handleMin.style.left = `${minPct}%`;
+        handleMax.style.left = `${maxPct}%`;
+        dimLeft.style.width = `${minPct}%`;
+        dimRight.style.width = `${100 - maxPct}%`;
+        onChange(values.min, values.max);
+      }
+
+      function startDrag(isMin, handle) {
+        return (e) => {
+          e.preventDefault();
+          handle.classList.add('active');
+          const rect = el.getBoundingClientRect();
+          const move = (ev) => {
+            const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+            const x = cx - rect.left;
+            const pct = Math.max(0, Math.min(1, x / rect.width));
+            const v = min + pct * (max - min);
+            const minGap = (max - min) * 0.005;
+            if (isMin) values.min = Math.min(v, values.max - minGap);
+            else       values.max = Math.max(v, values.min + minGap);
+            paint();
+          };
+          const up = () => {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', move);
+            document.removeEventListener('mouseup', up);
+            document.removeEventListener('touchmove', move);
+            document.removeEventListener('touchend', up);
+          };
+          document.addEventListener('mousemove', move);
+          document.addEventListener('mouseup', up);
+          document.addEventListener('touchmove', move, { passive: false });
+          document.addEventListener('touchend', up);
+        };
+      }
+
+      handleMin.addEventListener('mousedown', startDrag(true, handleMin));
+      handleMax.addEventListener('mousedown', startDrag(false, handleMax));
+      handleMin.addEventListener('touchstart', startDrag(true, handleMin), { passive: false });
+      handleMax.addEventListener('touchstart', startDrag(false, handleMax), { passive: false });
+
+      requestAnimationFrame(paint);
+      return { setValues: (mn, mx) => { values.min = mn; values.max = mx; paint(); } };
+    }
+
+    let processTimer = null;
+    const scheduleProcess = () => {
+      clearTimeout(processTimer);
+      processTimer = setTimeout(process, 25);
+    };
+
+    const wavelengthSlider = setupDualSlider($('wavelengthSlider'), (mn, mx) => {
+      state.wavelength.min = mn;
+      state.wavelength.max = mx;
+      $('wavelengthMinValue').textContent = Math.round(mn);
+      $('wavelengthMaxValue').textContent = Math.round(mx);
+      renderWavelengthHist();
+      scheduleProcess();
+    });
+
+    const intensitySlider = setupDualSlider($('intensitySlider'), (mn, mx) => {
+      state.intensity.min = mn;
+      state.intensity.max = mx;
+      $('intensityMinValue').textContent = Math.round(mn);
+      $('intensityMaxValue').textContent = Math.round(mx);
+      renderIntensityHist();
+      scheduleProcess();
+    });
+
+    $('featherSlider').addEventListener('input', (e) => {
+      state.feather = parseFloat(e.target.value);
+      $('featherValue').textContent = state.feather.toFixed(1);
+      scheduleProcess();
+    });
+
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.mode = btn.dataset.mode;
+        const labels = { mask: 'Mask Overlay', output: 'Output', original: 'Source' };
+        $('viewportMode').textContent = labels[state.mode];
+        process();
+      });
+    });
+
+    displayCanvas.addEventListener('mousemove', (e) => {
+      if (!state.imageData || state.isPanning) return;
+      const rect = displayCanvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) * (state.width / rect.width));
+      const y = Math.floor((e.clientY - rect.top) * (state.height / rect.height));
+      if (x < 0 || y < 0 || x >= state.width || y >= state.height) return;
+      const i = (y * state.width + x) * 4;
+      const d = state.imageData.data;
+      const r = d[i], g = d[i+1], b = d[i+2];
+      const [hue, sat, val] = rgbToHsv(r, g, b);
+      const wl = sat < 0.05 ? null : hueToWavelength(hue);
+      const sampleSwatch = $('sampleSwatch');
+      const sampleText = $('sampleText');
+      sampleSwatch.style.background = `rgb(${r},${g},${b})`;
+      sampleSwatch.style.borderColor = 'var(--border-bright)';
+      const wlText = wl === null ? 'gray' : wl < 0 ? 'n/a' : `${Math.round(wl)}nm`;
+      sampleText.classList.remove('empty');
+      sampleText.innerHTML = `<span class="lbl">λ</span> <span class="hi">${wlText}</span>&nbsp;&nbsp;<span class="lbl">I</span> <span class="hi">${Math.round(val * 100)}%</span>`;
+    });
+
+    displayCanvas.addEventListener('mouseleave', () => {
+      $('sampleText').classList.add('empty');
+      $('sampleText').textContent = 'Hover to sample';
+      $('sampleSwatch').style.background = 'var(--raised)';
+      $('sampleSwatch').style.borderColor = 'var(--border-bright)';
+    });
+
+    $('exportBtn').addEventListener('click', () => {
+      const w = state.width, h = state.height;
+      const mask = buildMask();
+      const src = state.imageData.data;
+
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = w;
+      exportCanvas.height = h;
+      const ectx = exportCanvas.getContext('2d');
+      const out = ectx.createImageData(w, h);
+      const whiteBg = state.outputBg === 'white';
+
+      for (let i = 0, p = 0; p < mask.length; i += 4, p++) {
+        const finalAlpha = src[i+3] * (1 - mask[p] / 255);
+        if (whiteBg) {
+          const a = finalAlpha / 255;
+          out.data[i]   = Math.round(src[i]   * a + 255 * (1 - a));
+          out.data[i+1] = Math.round(src[i+1] * a + 255 * (1 - a));
+          out.data[i+2] = Math.round(src[i+2] * a + 255 * (1 - a));
+          out.data[i+3] = 255;
+        } else {
+          out.data[i]   = src[i];
+          out.data[i+1] = src[i+1];
+          out.data[i+2] = src[i+2];
+          out.data[i+3] = Math.round(finalAlpha);
+        }
+      }
+
+      ectx.putImageData(out, 0, 0);
+
+      exportCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = whiteBg ? 'chromakey-output-white.png' : 'chromakey-output.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    });
+
+    // ════════════════════════════════════════════════════════════
+    // ZOOM + PAN
+    // ════════════════════════════════════════════════════════════
+    function applyTransform() {
+      displayCanvas.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+    }
+
+    function updateZoomLabel() {
+      $('zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+
+    function fitView() {
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      applyTransform();
+      updateZoomLabel();
+    }
+
+    // Cursor-centered zoom. If cx/cy omitted, zooms about viewport center.
+    function setZoom(newZoom, cx, cy) {
+      const vRect = viewport.getBoundingClientRect();
+      const vcx = vRect.width / 2;
+      const vcy = vRect.height / 2;
+      if (cx === undefined) cx = vcx;
+      if (cy === undefined) cy = vcy;
+
+      const dx = cx - vcx;
+      const dy = cy - vcy;
+      // Point in canvas space under cursor (pre-zoom)
+      const px = (dx - state.panX) / state.zoom;
+      const py = (dy - state.panY) / state.zoom;
+
+      newZoom = Math.max(0.1, Math.min(16, newZoom));
+      state.panX = dx - px * newZoom;
+      state.panY = dy - py * newZoom;
+      state.zoom = newZoom;
+
+      applyTransform();
+      updateZoomLabel();
+    }
+
+    $('zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.25));
+    $('zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
+    $('zoomLabel').addEventListener('click', fitView);
+
+    // Wheel zoom
+    viewport.addEventListener('wheel', (e) => {
+      if (!state.imageData) return;
+      e.preventDefault();
+      const vRect = viewport.getBoundingClientRect();
+      const cx = e.clientX - vRect.left;
+      const cy = e.clientY - vRect.top;
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      setZoom(state.zoom * factor, cx, cy);
+    }, { passive: false });
+
+    // Panning (left-click drag on canvas)
+    let panStart = null;
+    displayCanvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      panStart = { x: e.clientX, y: e.clientY, panX: state.panX, panY: state.panY };
+      state.isPanning = true;
+      displayCanvas.classList.add('panning');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!state.isPanning || !panStart) return;
+      state.panX = panStart.panX + (e.clientX - panStart.x);
+      state.panY = panStart.panY + (e.clientY - panStart.y);
+      applyTransform();
+    });
+    window.addEventListener('mouseup', () => {
+      if (!state.isPanning) return;
+      state.isPanning = false;
+      panStart = null;
+      displayCanvas.classList.remove('panning');
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (!state.imageData) return;
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === '0') { fitView(); e.preventDefault(); }
+      else if (e.key === '+' || e.key === '=') { setZoom(state.zoom * 1.25); e.preventDefault(); }
+      else if (e.key === '-' || e.key === '_') { setZoom(state.zoom / 1.25); e.preventDefault(); }
+    });
+
+    // ════════════════════════════════════════════════════════════
+    // INVERT MASK + OUTPUT BG
+    // ════════════════════════════════════════════════════════════
+    $('invertSwitch').addEventListener('click', (e) => {
+      state.invertMask = !state.invertMask;
+      e.currentTarget.dataset.on = state.invertMask ? 'true' : 'false';
+      process();
+    });
+
+    document.querySelectorAll('#outputBgToggle .seg').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#outputBgToggle .seg').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.outputBg = btn.dataset.bg;
+        process();
+      });
+    });
+
+    $('resetBtn').addEventListener('click', () => {
+      wavelengthSlider.setValues(380, 700);
+      intensitySlider.setValues(0, 100);
+      $('featherSlider').value = 0;
+      $('featherValue').textContent = '0.0';
+      state.feather = 0;
+      renderAllHistograms();
+      scheduleProcess();
+    });
+  </script>
+</body>
+</html>
