@@ -39,24 +39,23 @@ You get a live preview with a red mask overlay showing exactly what will be remo
 
 ## Running it
 
-This is a single HTML file. There's no build step, no dependencies, no server required.
-
-**Easiest way:** double-click `index.html` and it opens in your browser.
-
-**If you'd rather serve it locally** (some browsers are stricter about `file://` drag-and-drop):
+CHROMAKEY uses [Vite](https://vitejs.dev/) for local dev and production builds.
 
 ```bash
-# Python 3
-python -m http.server 8000
-
-# Node
-npx serve
-
-# PHP
-php -S localhost:8000
+npm install
+npm run dev
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:5173` in your browser.
+
+To produce a static build for hosting:
+
+```bash
+npm run build      # outputs dist/
+npm run preview    # serves dist/ for a local smoke-test
+```
+
+The built `dist/` folder is a plain set of static files — drop it on any static host. The repo also deploys cleanly to [Vercel](https://vercel.com)'s free tier: import the repo and Vercel will auto-detect the Vite preset (build = `vite build`, output = `dist`).
 
 ## How to use
 
